@@ -1,0 +1,257 @@
+require(tidyverse)
+require(readxl)
+require(magrittr)
+require(sf)
+require(fuzzyjoin)
+
+empresi_reports_bt <- read.csv("Data/empresi_reports_bt.csv") %>% 
+  filter(Country == "Italy")
+
+empresi_reports_bt$Diagnosis.Source %>% unique
+
+benv_report24 <- read_excel("Data/focolai_benv_bt24.xlsx")
+benv_report25 <- read_excel("Data/focolai_benv_bt25.xlsx")
+
+benv_report24$`Tipo focolaio` %>% unique
+benv_report25$`Tipo focolaio` %>% unique
+
+benv_report25 %>% count(Regione)
+benv_report24 %>% count(Regione)
+
+Comuni2025 <- read_excel("C:/Users/ndrto/Desktop/side_project/TOSV/data/Comuni2025.xlsx")
+
+empresi_reports_bt %<>% 
+  mutate(
+    Locality_code = str_extract(Locality, "^\\d+"),
+    Locality_name = str_trim(str_remove(Locality, "^\\d+")),
+    Locality_name = str_replace(Locality_name, "  ", " "),
+    Locality_name = str_to_sentence(Locality_name)
+  )
+
+Comuni2025$Comuni2025.Comune <- str_to_sentence(Comuni2025$Comuni2025.Comune)
+
+setdiff(empresi_reports_bt$Locality_name, Comuni2025$Comuni2025.Comune) 
+
+Comuni2025 %>%
+  filter(str_detect(Comuni2025.Comune, regex("giusta", ignore_case = TRUE))) %>%
+  pull(Comuni2025.Comune)
+
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Rio di pusteria"] <- "Rio di pusteria/mühlbach"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Trodena"] <- "Trodena nel parco naturale/truden im naturpark"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Chienes"] <- "Chienes/kiens"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Sant' andrea frius"] <- "Sant'andrea frius"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Sant' anna arresi"] <- "Sant'anna arresi"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Sant' antioco"] <- "Sant'antioco"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Cornedo all' isarco"] <- "Cornedo all'isarco/karneid"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Renon"] <- "Renon/ritten"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "San pier d' isonzo"] <- "San pier d'isonzo"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Arzene"] <- "Valvasone arzene"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Vito d' asio"] <- "Vito d'asio"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Ob_132887 - bt-2024-8 - marrubiu"] <- "Marrubiu"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Ob_132891 - bt-2024-21 - arborea"] <- "Arborea"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Ob_132888 - bt-2024-9 - arborea"] <- "Arborea"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Ob_132890 - bt-2024-16 - arborea"] <- "Arborea"
+empresi_reports_bt$Locality_name[empresi_reports_bt$Locality_name == "Ob_132889 - bt-2024-12 - santa giusta"] <- "Santa giusta"
+
+empresi_reports_bt %>% filter(Locality_name == "Marrubiu")
+
+empresi_reports_bt <- merge.data.frame(empresi_reports_bt, Comuni2025[c("CodComN", "Comuni2025.Comune", "Provincia", "Regione", "RipartizioneGeografica")], by.x = "Locality_name", by.y = "Comuni2025.Comune")
+
+benv <- rbind(benv_report25, benv_report24)
+
+benv %<>% filter(`Tipo focolaio` == "FOCOLAIO CLINICO")
+benv %<>% distinct(ID, `Data sospetto`, Comune, Provincia, Regione, Sierotipo) 
+benv %<>% mutate(`Data sospetto` = str_replace(`Data sospetto`, "/", "-"))
+
+
+
+empresi_reports_bt %>% filter(Locality_name == "Santadi")
+benv %>% filter(Comune == "SANTADI") %>% View
+
+empresi_reports_bt %<>% mutate(observation.date = sub("T.*$", "", empresi_reports_bt$observation.date)) %>% 
+  rename("Comune" = Locality_name,
+         `Data sospetto` = observation.date) %>% 
+  select(`Data sospetto`, Comune, Provincia, Regione) %>% 
+  mutate(Regione = str_to_upper(Regione),
+         Comune = str_to_upper(Comune))
+
+empresi_reports_bt$Regione[empresi_reports_bt$Regione == "VALLE D'AOSTA/VALLÉE D'AOSTE"] <- "VALLE D'AOSTA"
+empresi_reports_bt$Regione[empresi_reports_bt$Regione == "FRIULI-VENEZIA GIULIA"] <- "FRIULI VENEZIA GIULIA"
+empresi_reports_bt$Regione[empresi_reports_bt$Regione == "EMILIA-ROMAGNA"] <- "EMILIA ROMAGNA"
+empresi_reports_bt$Regione[empresi_reports_bt$Regione == "TRENTINO-ALTO ADIGE/SÜDTIROL"] <- "TRENTINO ALTO ADIGE"
+setdiff(empresi_reports_bt$Regione, benv$Regione)
+
+benv %>% 
+  filter(str_detect(Comune, regex("vito", ignore_case = TRUE)))
+
+benv$Comune[benv$Comune == "SANT\\'ANNA ARRESI"] <- "SANT'ANNA ARRESI"
+benv$Comune[benv$Comune == "SAN PIER D\\'ISONZO"] <- "SAN PIER D'ISONZO"
+benv$Comune[benv$Comune == "SANT\\'ANDREA FRIUS"] <- "SANT'ANDREA FRIUS"
+benv$Comune[benv$Comune == "SANT\\'ANTIOCO"] <- "SANT'ANTIOCO"
+
+empresi_reports_bt$Comune %>% unique %>% length - setdiff(empresi_reports_bt$Comune, benv$Comune) %>% unique %>% length
+benv$Comune %>% unique %>% length - setdiff(benv$Comune, empresi_reports_bt$Comune) %>% unique %>% length
+
+benv %<>%
+  mutate(`Data sospetto` = as.Date(`Data sospetto`, format = "%d-%m-%Y"))
+
+empresi_reports_bt %<>%
+  as.tibble() %>% 
+  mutate(`Data sospetto` = as.Date(`Data sospetto`))
+
+intersect(empresi_reports_bt$Regione, benv$Regione) -> common_regions
+
+inner_join(empresi_reports_bt[c(1, 2, 4)] %>% distinct, benv[c(2, 3, 5)] %>% distinct, by = c("Data sospetto", "Comune", "Regione"))
+
+nrow(empresi_reports_bt[c(1, 2, 4)] %>% distinct)
+nrow(benv[c(2, 3, 5)] %>% distinct)
+nrow(inner_join(empresi_reports_bt[c(1, 2, 4)] %>% distinct, benv[c(2, 3, 5)] %>% distinct, by = c("Data sospetto", "Comune", "Regione")))
+
+tibble(Regione = common_regions,
+       empresi = rep(0, length(common_regions)),
+       benv = rep(0, length(common_regions)),
+       overlap = rep(0, length(common_regions)),
+       CI_low = rep(0, length(common_regions)),
+       CI_high = rep(0, length(common_regions)),
+       estimate = rep(0, length(common_regions))) -> tab
+
+
+for (reg in common_regions){
+  
+  empres_tmp <- empresi_reports_bt %>% filter(Regione == reg) %>% distinct
+  benv_tmp <- benv %>% filter(Regione == reg) %>% distinct
+  
+  both_tmp <- inner_join(empres_tmp[c(1, 2, 4)] %>% distinct, benv_tmp[c(2, 3, 5)] %>% distinct, by = c("Data sospetto", "Comune", "Regione"))
+  
+  n1 <- nrow(empres_tmp)
+  n2 <- nrow(benv_tmp)
+  m  <- nrow(both_tmp)
+  
+  # Chapman
+  N_hat <- (((n1 + 1) * (n2 + 1)) / (m + 1)) - 1
+  
+  # Varianza Chapman
+  var_N <- ((n1 + 1) * (n2 + 1) * (n1 - m) * (n2 - m)) /
+    ((m + 1)^2 * (m + 2))
+  
+  se_N <- sqrt(var_N)
+  
+  # IC 95%
+  CI_low  <- N_hat - 1.96 * se_N
+  CI_high <- N_hat + 1.96 * se_N
+  
+  tab$empresi[tab$Regione == reg] <- n1
+  tab$benv[tab$Regione == reg]    <- n2
+  tab$overlap[tab$Regione == reg] <- m
+  tab$estimate[tab$Regione == reg]   <- N_hat
+  tab$CI_low[tab$Regione == reg]  <- CI_low
+  tab$CI_high[tab$Regione == reg] <- CI_high
+}
+  
+ita_shp <- read_sf("Data/ITA_adm1.shp") 
+ita_shp$NAME_1 <- str_to_upper(ita_shp$NAME_1)
+
+setdiff(ita_shp$NAME_1, empresi_reports_bt$Regione)
+
+Region_cases <- merge.data.frame(empresi_reports_bt %>% count(Regione), benv %>% count(Regione), by = "Regione") %>% rename("empresi" = n.x, "benv" = n.y)
+
+ita_shp$NAME_1[ita_shp$NAME_1 == "SICILY"] <- "SICILIA"
+
+ita_shp_joined <- stringdist_left_join(
+  ita_shp,
+  Region_cases,
+  by = c("NAME_1" = "Regione"),
+  method = "jw",      # Jaro-Winkler (ottimo per nomi)
+  max_dist = 0.15     # soglia: più piccolo = più severo
+)
+
+ita_shp_joined %>% st_drop_geometry %>% View
+
+map_empresi <- ggplot(ita_shp_joined) +
+  geom_sf(aes(fill = empresi), color = "grey70", size = 0.2) +
+  scale_fill_viridis_c(
+    name = "EMPRES-i cases",
+    option = "C",
+    trans = "sqrt"
+  ) +
+  geom_sf_text(
+    aes(label = empresi),
+    size = 3,
+    color = "white"
+  ) +
+  labs(
+    title = "Bluetongue outbreaks in EMPRES-i",
+    caption = "Source: FAO EMPRES-i",
+    x = "",
+    y = ""
+  ) +
+  theme_minimal()
+
+
+map_benv <- ggplot(ita_shp_joined) +
+  geom_sf(aes(fill = benv), color = "grey70", size = 0.2) +
+  scale_fill_viridis_c( name = "BENV cases",
+                        option = "C",
+                        trans = "sqrt") +
+  geom_sf_text(
+    aes(label = benv),
+    size = 3,
+    color = "white"
+  ) +
+  labs(
+    title = "Bluetongue outbreaks in BENV",
+    caption = "Source: Bollettino Epidemiologico Nazionale Veterinario",
+    x = "",
+    y = ""
+  ) +
+  theme_minimal()
+
+library(patchwork)
+map_empresi + map_benv
+
+nrow(benv)
+
+install.packages("ggVennDiagram")
+library(ggVennDiagram)
+
+venn_data <- list(
+  EMPRESi = 1:227,
+  BENV    = c(1:171, 228:5726)
+)
+
+ggVennDiagram(venn_data, label = "count") +
+  scale_fill_gradient(low = "steelblue3", high = "firebrick",
+                      trans = "sqrt") +
+  labs(
+    title = "Overlap between EMPRES-i and BENV reports",
+    subtitle = "Bluetongue oubreaks"
+  ) +
+  theme_void()
+
+
+ita_shp_joined_fin <- stringdist_left_join(
+  ita_shp,
+  tab,
+  by = c("NAME_1" = "Regione"),
+  method = "jw",      # Jaro-Winkler (ottimo per nomi)
+  max_dist = 0.15     # soglia: più piccolo = più severo
+)
+
+ggplot(ita_shp_joined_fin) +
+  geom_sf(aes(fill = estimate), color = "grey70", size = 0.2) +
+  scale_fill_viridis_c(
+    name = "EMPRES-i cases",
+    option = "C",
+    trans = "sqrt"
+  ) +
+  geom_sf_text(
+    aes(label = round(estimate, 0)),
+    size = 3,
+    color = "white"
+  ) +
+  labs(
+    title = "Estimated number of outbreaks",
+    x = "",
+    y = ""
+  ) +
+  theme_minimal()
